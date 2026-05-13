@@ -1,8 +1,4 @@
-# Spider-Man Style Streamlit UI Upgrade
 
-Replace your current `app.py` UI section with this upgraded version.
-
-```python
 import streamlit as st
 import time
 
@@ -11,7 +7,7 @@ st.set_page_config(
     layout="wide"
 )
 
-# custom css
+
 st.markdown(
     """
     <style>
@@ -87,7 +83,7 @@ st.markdown(
     unsafe_allow_html=True
 )
 
-# title
+
 st.markdown(
     """
     <div class='main-title'>🕷️ Spider AI Financial Platform</div>
@@ -102,7 +98,7 @@ st.markdown(
     unsafe_allow_html=True
 )
 
-# sidebar
+
 st.sidebar.title("⚡ AI Control Center")
 
 stock = st.sidebar.selectbox(
@@ -110,7 +106,7 @@ stock = st.sidebar.selectbox(
     ["AAPL","MSFT","GOOGL","AMZN","TSLA"]
 )
 
-# sample predictions
+
 signals = {
     "AAPL":"BUY",
     "MSFT":"BUY",
@@ -139,7 +135,6 @@ signal = signals[stock]
 confidence = confidence_data[stock]
 risk = risk_data[stock]
 
-# recommendation color
 signal_class = "hold"
 
 if signal == "BUY":
@@ -148,11 +143,11 @@ if signal == "BUY":
 elif signal == "SELL":
     signal_class = "sell"
 
-# loading effect
+
 with st.spinner("🕸️ AI analyzing market signals..."):
     time.sleep(1.5)
 
-# top metrics
+
 col1, col2, col3 = st.columns(3)
 
 with col1:
@@ -197,12 +192,12 @@ with col3:
         unsafe_allow_html=True
     )
 
-# progress bar
+
 st.subheader("⚡ AI Confidence Meter")
 
 st.progress(confidence / 100)
 
-# fake live market feed
+
 st.subheader("📡 Live AI Market Feed")
 
 st.write(f"Selected Stock: {stock}")
@@ -210,14 +205,14 @@ st.write("AI scanning RSI, MACD, EMA and momentum signals...")
 st.write("Detecting institutional buying pressure...")
 st.write("Volatility engine active...")
 
-# chart
+
 st.subheader("📈 Stock Trend Visualization")
 
 chart_data = [10,15,13,18,20,17,25,28,30]
 
 st.line_chart(chart_data)
 
-# ai explanation
+
 st.subheader("🧠 AI Analysis")
 
 if signal == "BUY":
@@ -238,7 +233,7 @@ else:
         "Market momentum is currently neutral."
     )
 
-# footer
+
 st.markdown("---")
 
 st.markdown(
@@ -249,19 +244,5 @@ st.markdown(
     """,
     unsafe_allow_html=True
 )
-```
 
----
-
-# HOW TO USE
-
-1. Open GitHub repo
-2. Open `app.py`
-3. Delete old UI code
-4. Paste this upgraded version
-5. Commit changes
-6. Wait 1 minute
-7. Refresh Streamlit app
-
-Your platform will now look much more futuristic and cinematic.
 
