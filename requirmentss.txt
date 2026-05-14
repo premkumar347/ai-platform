@@ -1,5 +1,5 @@
 streamlit
 pandas
-yfinance
-ta
 numpy
+yfinance==0.2.54
+ta
