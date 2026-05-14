@@ -1,13 +1,21 @@
-
 import streamlit as st
+import pandas as pd
+import numpy as np
+import yfinance as yf
+import joblib
 import time
 
+from ta.momentum import RSIIndicator
+from ta.trend import MACD, EMAIndicator
+from ta.volatility import BollingerBands
+
+# page config
 st.set_page_config(
     page_title="Spider AI Financial Platform",
     layout="wide"
 )
 
-
+# custom css
 st.markdown(
     """
     <style>
@@ -83,166 +91,393 @@ st.markdown(
     unsafe_allow_html=True
 )
 
-
+# title
 st.markdown(
     """
-    <div class='main-title'>🕷️ Spider AI Financial Platform</div>
+    <div class='main-title'>
+    🕷️ Spider AI Financial Platform
+    </div>
     """,
     unsafe_allow_html=True
 )
 
 st.markdown(
     """
-    <div class='sub-title'>Real Time AI Powered Stock Intelligence</div>
+    <div class='sub-title'>
+    Real Time AI Powered Stock Intelligence
+    </div>
     """,
     unsafe_allow_html=True
 )
 
-
-st.sidebar.title("⚡ AI Control Center")
+# sidebar
+st.sidebar.title(
+    "⚡ AI Control Center"
+)
 
 stock = st.sidebar.selectbox(
+
     "Select Stock",
+
     ["AAPL","MSFT","GOOGL","AMZN","TSLA"]
 )
 
+# loading animation
+with st.spinner(
+    "🕸️ AI analyzing live market signals..."
+):
+    time.sleep(2)
 
-signals = {
-    "AAPL":"BUY",
-    "MSFT":"BUY",
-    "GOOGL":"HOLD",
-    "AMZN":"SELL",
-    "TSLA":"SELL"
+# load model
+model = joblib.load(
+    "stock_model.pkl"
+)
+
+# download live stock data
+data = yf.download(
+
+    stock,
+
+    period="1y"
+)
+
+# fixing multiindex issue
+if isinstance(data.columns, pd.MultiIndex):
+
+    data.columns = (
+        data.columns.get_level_values(0)
+    )
+
+# RSI
+data["RSI"] = RSIIndicator(
+    close=data["Close"]
+).rsi()
+
+# MACD
+data["MACD"] = MACD(
+    close=data["Close"]
+).macd()
+
+# EMA
+data["EMA"] = EMAIndicator(
+    close=data["Close"]
+).ema_indicator()
+
+# Bollinger Bands
+bb = BollingerBands(
+    close=data["Close"]
+)
+
+data["BB_High"] = (
+    bb.bollinger_hband()
+)
+
+data["BB_Low"] = (
+    bb.bollinger_lband()
+)
+
+# daily return
+data["Daily_Return"] = (
+    data["Close"].pct_change()
+)
+
+# volatility
+data["Volatility"] = (
+    (data["High"] - data["Low"])
+    /
+    data["Close"]
+)
+
+# volume change
+data["Volume_Change"] = (
+    data["Volume"].pct_change()
+)
+
+# momentum
+data["Momentum"] = (
+    data["Close"]
+    -
+    data["Close"].shift(10)
+)
+
+# moving average ratio
+data["MA_Ratio"] = (
+    data["Close"]
+    /
+    data["EMA"]
+)
+
+# trend strength
+data["Trend_Strength"] = (
+    data["MACD"]
+    *
+    data["RSI"]
+)
+
+# stock encoding
+stock_map = {
+
+    "AAPL":0,
+    "MSFT":1,
+    "GOOGL":2,
+    "AMZN":3,
+    "TSLA":4
 }
 
-confidence_data = {
-    "AAPL":82,
-    "MSFT":76,
-    "GOOGL":67,
-    "AMZN":58,
-    "TSLA":61
-}
+data["Stock_Code"] = (
+    stock_map[stock]
+)
 
-risk_data = {
-    "AAPL":"LOW",
-    "MSFT":"LOW",
-    "GOOGL":"MEDIUM",
-    "AMZN":"HIGH",
-    "TSLA":"HIGH"
-}
+# remove missing values
+data.dropna(inplace=True)
 
-signal = signals[stock]
-confidence = confidence_data[stock]
-risk = risk_data[stock]
+# features
+features = [
 
+    "RSI",
+    "MACD",
+    "EMA",
+    "BB_High",
+    "BB_Low",
+    "Volume",
+    "Daily_Return",
+    "Volatility",
+    "Volume_Change",
+    "Momentum",
+    "MA_Ratio",
+    "Trend_Strength",
+    "Stock_Code"
+]
+
+latest = (
+    data[features]
+    .tail(1)
+)
+
+# prediction
+pred = model.predict(latest)[0]
+
+# probability
+prob = model.predict_proba(latest)[0]
+
+confidence = round(
+    max(prob) * 100,
+    2
+)
+
+# signal logic
+if confidence < 60:
+
+    signal = "HOLD"
+
+elif pred == 1:
+
+    signal = "BUY"
+
+else:
+
+    signal = "SELL"
+
+# risk logic
+avg_volatility = (
+
+    data["Volatility"]
+
+    .tail(30)
+
+    .mean()
+)
+
+if avg_volatility < 0.02:
+
+    risk = "LOW"
+
+elif avg_volatility < 0.05:
+
+    risk = "MEDIUM"
+
+else:
+
+    risk = "HIGH"
+
+# signal color
 signal_class = "hold"
 
 if signal == "BUY":
+
     signal_class = "buy"
 
 elif signal == "SELL":
+
     signal_class = "sell"
 
-
-with st.spinner("🕸️ AI analyzing market signals..."):
-    time.sleep(1.5)
-
-
+# top metrics
 col1, col2, col3 = st.columns(3)
 
 with col1:
 
     st.markdown(
-        f"""
-        <div class='card'>
-            <div class='metric-title'>Recommendation</div>
-            <div class='metric-value {signal_class}'>
-                {signal}
+        f'''
+        <div class="card">
+
+            <div class="metric-title">
+            Recommendation
             </div>
+
+            <div class="metric-value {signal_class}">
+            {signal}
+            </div>
+
         </div>
-        """,
+        ''',
         unsafe_allow_html=True
     )
 
 with col2:
 
     st.markdown(
-        f"""
-        <div class='card'>
-            <div class='metric-title'>Confidence</div>
-            <div class='metric-value'>
-                {confidence}%
+        f'''
+        <div class="card">
+
+            <div class="metric-title">
+            Confidence
             </div>
+
+            <div class="metric-value">
+            {confidence}%
+            </div>
+
         </div>
-        """,
+        ''',
         unsafe_allow_html=True
     )
 
 with col3:
 
     st.markdown(
-        f"""
-        <div class='card'>
-            <div class='metric-title'>Risk Level</div>
-            <div class='metric-value'>
-                {risk}
+        f'''
+        <div class="card">
+
+            <div class="metric-title">
+            Risk Level
             </div>
+
+            <div class="metric-value">
+            {risk}
+            </div>
+
         </div>
-        """,
+        ''',
         unsafe_allow_html=True
     )
 
-
-st.subheader("⚡ AI Confidence Meter")
+# confidence bar
+st.subheader(
+    "⚡ AI Confidence Meter"
+)
 
 st.progress(confidence / 100)
 
+# live feed
+st.subheader(
+    "📡 Live AI Market Feed"
+)
 
-st.subheader("📡 Live AI Market Feed")
+st.write(
+    f"Selected Stock: {stock}"
+)
 
-st.write(f"Selected Stock: {stock}")
-st.write("AI scanning RSI, MACD, EMA and momentum signals...")
-st.write("Detecting institutional buying pressure...")
-st.write("Volatility engine active...")
+st.write(
+    "AI scanning RSI, MACD, EMA and momentum signals..."
+)
 
+st.write(
+    "Detecting institutional buying pressure..."
+)
 
-st.subheader("📈 Stock Trend Visualization")
+st.write(
+    "Volatility engine active..."
+)
 
-chart_data = [10,15,13,18,20,17,25,28,30]
+# chart
+st.subheader(
+    "📈 Live Stock Price Chart"
+)
 
-st.line_chart(chart_data)
+st.line_chart(
+    data["Close"]
+)
 
+# AI explanations
+latest_rsi = (
+    data["RSI"]
+    .iloc[-1]
+)
 
-st.subheader("🧠 AI Analysis")
+latest_macd = (
+    data["MACD"]
+    .iloc[-1]
+)
 
-if signal == "BUY":
+reasons = []
 
-    st.success(
-        "Bullish momentum detected with strong trend confirmation."
+if latest_rsi > 70:
+
+    reasons.append(
+        "RSI indicates overbought market"
     )
 
-elif signal == "SELL":
+elif latest_rsi < 30:
 
-    st.error(
-        "Bearish pressure and high volatility detected."
+    reasons.append(
+        "RSI indicates oversold recovery"
+    )
+
+if latest_macd > 0:
+
+    reasons.append(
+        "MACD shows bullish momentum"
     )
 
 else:
 
-    st.warning(
-        "Market momentum is currently neutral."
+    reasons.append(
+        "MACD shows bearish momentum"
     )
 
+if risk == "HIGH":
 
+    reasons.append(
+        "Market volatility is high"
+    )
+
+st.subheader(
+    "🧠 AI Analysis"
+)
+
+for r in reasons:
+
+    st.write("-", r)
+
+# latest market data
+st.subheader(
+    "📊 Latest Market Data"
+)
+
+st.dataframe(
+    data.tail(5)
+)
+
+# footer
 st.markdown("---")
 
 st.markdown(
     """
     <center>
-    🕷️ Spider AI Financial Engine | Real Time Market Intelligence
+    🕷️ Spider AI Financial Engine |
+    Real Time Market Intelligence
     </center>
     """,
     unsafe_allow_html=True
 )
-
 
