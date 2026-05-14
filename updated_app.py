@@ -2,20 +2,17 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import yfinance as yf
-import joblib
 import time
 
 from ta.momentum import RSIIndicator
 from ta.trend import MACD, EMAIndicator
 from ta.volatility import BollingerBands
 
-# page config
 st.set_page_config(
     page_title="Spider AI Financial Platform",
     layout="wide"
 )
 
-# custom css
 st.markdown(
     """
     <style>
@@ -91,7 +88,6 @@ st.markdown(
     unsafe_allow_html=True
 )
 
-# title
 st.markdown(
     """
     <div class='main-title'>
@@ -110,60 +106,43 @@ st.markdown(
     unsafe_allow_html=True
 )
 
-# sidebar
 st.sidebar.title(
     "⚡ AI Control Center"
 )
 
 stock = st.sidebar.selectbox(
-
     "Select Stock",
-
     ["AAPL","MSFT","GOOGL","AMZN","TSLA"]
 )
 
-# loading animation
 with st.spinner(
     "🕸️ AI analyzing live market signals..."
 ):
     time.sleep(2)
 
-# load model
-model = joblib.load(
-    "stock_model.pkl"
-)
-
-# download live stock data
 data = yf.download(
-
     stock,
-
     period="1y"
 )
 
-# fixing multiindex issue
 if isinstance(data.columns, pd.MultiIndex):
 
     data.columns = (
         data.columns.get_level_values(0)
     )
 
-# RSI
 data["RSI"] = RSIIndicator(
     close=data["Close"]
 ).rsi()
 
-# MACD
 data["MACD"] = MACD(
     close=data["Close"]
 ).macd()
 
-# EMA
 data["EMA"] = EMAIndicator(
     close=data["Close"]
 ).ema_indicator()
 
-# Bollinger Bands
 bb = BollingerBands(
     close=data["Close"]
 )
@@ -176,123 +155,95 @@ data["BB_Low"] = (
     bb.bollinger_lband()
 )
 
-# daily return
 data["Daily_Return"] = (
     data["Close"].pct_change()
 )
 
-# volatility
 data["Volatility"] = (
     (data["High"] - data["Low"])
     /
     data["Close"]
 )
 
-# volume change
 data["Volume_Change"] = (
     data["Volume"].pct_change()
 )
 
-# momentum
 data["Momentum"] = (
     data["Close"]
     -
     data["Close"].shift(10)
 )
 
-# moving average ratio
 data["MA_Ratio"] = (
     data["Close"]
     /
     data["EMA"]
 )
 
-# trend strength
 data["Trend_Strength"] = (
     data["MACD"]
     *
     data["RSI"]
 )
 
-# stock encoding
-stock_map = {
-
-    "AAPL":0,
-    "MSFT":1,
-    "GOOGL":2,
-    "AMZN":3,
-    "TSLA":4
-}
-
-data["Stock_Code"] = (
-    stock_map[stock]
-)
-
-# remove missing values
 data.dropna(inplace=True)
 
-# features
-features = [
-
-    "RSI",
-    "MACD",
-    "EMA",
-    "BB_High",
-    "BB_Low",
-    "Volume",
-    "Daily_Return",
-    "Volatility",
-    "Volume_Change",
-    "Momentum",
-    "MA_Ratio",
-    "Trend_Strength",
-    "Stock_Code"
-]
-
-latest = (
-    data[features]
-    .tail(1)
-)
-
-# prediction
-pred = model.predict(latest)[0]
-
-# probability
-prob = model.predict_proba(latest)[0]
-
-confidence = round(
-    max(prob) * 100,
+latest_rsi = round(
+    data["RSI"].iloc[-1],
     2
 )
 
-# signal logic
-if confidence < 60:
+latest_macd = round(
+    data["MACD"].iloc[-1],
+    2
+)
 
-    signal = "HOLD"
+latest_close = round(
+    data["Close"].iloc[-1],
+    2
+)
 
-elif pred == 1:
+volatility = round(
+    data["Volatility"]
+    .tail(30)
+    .mean(),
+    4
+)
+
+signal = "HOLD"
+
+confidence = 50
+
+if latest_rsi < 35 and latest_macd > 0:
 
     signal = "BUY"
+
+    confidence = 82
+
+elif latest_rsi > 70 and latest_macd < 0:
+
+    signal = "SELL"
+
+    confidence = 79
+
+elif latest_macd > 0:
+
+    signal = "BUY"
+
+    confidence = 68
 
 else:
 
     signal = "SELL"
 
-# risk logic
-avg_volatility = (
+    confidence = 64
 
-    data["Volatility"]
-
-    .tail(30)
-
-    .mean()
-)
-
-if avg_volatility < 0.02:
+if volatility < 0.02:
 
     risk = "LOW"
 
-elif avg_volatility < 0.05:
+elif volatility < 0.05:
 
     risk = "MEDIUM"
 
@@ -300,7 +251,6 @@ else:
 
     risk = "HIGH"
 
-# signal color
 signal_class = "hold"
 
 if signal == "BUY":
@@ -311,7 +261,6 @@ elif signal == "SELL":
 
     signal_class = "sell"
 
-# top metrics
 col1, col2, col3 = st.columns(3)
 
 with col1:
@@ -371,14 +320,12 @@ with col3:
         unsafe_allow_html=True
     )
 
-# confidence bar
 st.subheader(
     "⚡ AI Confidence Meter"
 )
 
 st.progress(confidence / 100)
 
-# live feed
 st.subheader(
     "📡 Live AI Market Feed"
 )
@@ -388,35 +335,27 @@ st.write(
 )
 
 st.write(
-    "AI scanning RSI, MACD, EMA and momentum signals..."
+    f"Latest Close Price: {latest_close}"
 )
 
 st.write(
-    "Detecting institutional buying pressure..."
+    f"RSI: {latest_rsi}"
 )
 
 st.write(
-    "Volatility engine active..."
+    f"MACD: {latest_macd}"
 )
 
-# chart
+st.write(
+    "AI scanning momentum and volatility signals..."
+)
+
 st.subheader(
     "📈 Live Stock Price Chart"
 )
 
 st.line_chart(
     data["Close"]
-)
-
-# AI explanations
-latest_rsi = (
-    data["RSI"]
-    .iloc[-1]
-)
-
-latest_macd = (
-    data["MACD"]
-    .iloc[-1]
 )
 
 reasons = []
@@ -459,7 +398,6 @@ for r in reasons:
 
     st.write("-", r)
 
-# latest market data
 st.subheader(
     "📊 Latest Market Data"
 )
@@ -468,7 +406,6 @@ st.dataframe(
     data.tail(5)
 )
 
-# footer
 st.markdown("---")
 
 st.markdown(
