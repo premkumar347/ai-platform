@@ -1,12 +1,17 @@
 import streamlit as st
+import pandas as pd
+import yfinance as yf
 import time
+
+from ta.momentum import RSIIndicator
+from ta.trend import MACD, EMAIndicator
+from ta.volatility import BollingerBands
 
 st.set_page_config(
     page_title="Spider AI Financial Platform",
     layout="wide"
 )
 
-# custom css
 st.markdown(
     """
     <style>
@@ -54,6 +59,7 @@ st.markdown(
         color: #93c5fd;
         font-size: 18px;
         font-weight: bold;
+        margin-bottom: 10px;
     }
 
     .metric-value {
@@ -82,10 +88,11 @@ st.markdown(
     unsafe_allow_html=True
 )
 
-# title
 st.markdown(
     """
-    <div class='main-title'>🕷️ Spider AI Financial Platform</div>
+    <div class='main-title'>
+    🕷️ Spider AI Financial Platform
+    </div>
     """,
     unsafe_allow_html=True
 )
@@ -99,153 +106,265 @@ st.markdown(
     unsafe_allow_html=True
 )
 
-# sidebar
-st.sidebar.title("⚡ AI Control Center")
+st.sidebar.title(
+    "⚡ AI Control Center"
+)
 
 stock = st.sidebar.selectbox(
     "Select Stock",
     ["AAPL","MSFT","GOOGL","AMZN","TSLA"]
 )
 
-signals = {
-    "AAPL":"BUY",
-    "MSFT":"BUY",
-    "GOOGL":"HOLD",
-    "AMZN":"SELL",
-    "TSLA":"SELL"
-}
+with st.spinner(
+    "🕸️ AI analyzing live market signals..."
+):
+    time.sleep(1)
 
-confidence_data = {
-    "AAPL":82,
-    "MSFT":76,
-    "GOOGL":67,
-    "AMZN":58,
-    "TSLA":61
-}
+data = yf.download(
+    stock,
+    period="1y",
+    auto_adjust=True
+)
 
-risk_data = {
-    "AAPL":"LOW",
-    "MSFT":"LOW",
-    "GOOGL":"MEDIUM",
-    "AMZN":"HIGH",
-    "TSLA":"HIGH"
-}
+if isinstance(data.columns, pd.MultiIndex):
 
-signal = signals[stock]
+    data.columns = (
+        data.columns.get_level_values(0)
+    )
 
-confidence = confidence_data[stock]
+data.dropna(inplace=True)
 
-risk = risk_data[stock]
+data["RSI"] = RSIIndicator(
+    close=data["Close"]
+).rsi()
+
+data["MACD"] = MACD(
+    close=data["Close"]
+).macd()
+
+data["EMA"] = EMAIndicator(
+    close=data["Close"]
+).ema_indicator()
+
+bb = BollingerBands(
+    close=data["Close"]
+)
+
+data["BB_High"] = (
+    bb.bollinger_hband()
+)
+
+data["BB_Low"] = (
+    bb.bollinger_lband()
+)
+
+data.dropna(inplace=True)
+
+latest_close = round(
+    float(data["Close"].iloc[-1]),
+    2
+)
+
+latest_rsi = round(
+    float(data["RSI"].iloc[-1]),
+    2
+)
+
+latest_macd = round(
+    float(data["MACD"].iloc[-1]),
+    2
+)
+
+signal = "HOLD"
+
+confidence = 50
+
+if latest_rsi < 35 and latest_macd > 0:
+
+    signal = "BUY"
+
+    confidence = 82
+
+elif latest_rsi > 70 and latest_macd < 0:
+
+    signal = "SELL"
+
+    confidence = 79
+
+elif latest_macd > 0:
+
+    signal = "BUY"
+
+    confidence = 68
+
+else:
+
+    signal = "SELL"
+
+    confidence = 64
+
+volatility = (
+    (data["High"] - data["Low"])
+    /
+    data["Close"]
+).tail(30).mean()
+
+if volatility < 0.02:
+
+    risk = "LOW"
+
+elif volatility < 0.05:
+
+    risk = "MEDIUM"
+
+else:
+
+    risk = "HIGH"
 
 signal_class = "hold"
 
 if signal == "BUY":
+
     signal_class = "buy"
 
 elif signal == "SELL":
-    signal_class = "sell"
 
-with st.spinner("🕸️ AI analyzing market signals..."):
-    time.sleep(1.5)
+    signal_class = "sell"
 
 col1, col2, col3 = st.columns(3)
 
 with col1:
 
     st.markdown(
-        f'''
+        f"""
         <div class="card">
+
             <div class="metric-title">
-            Recommendation
+                Recommendation
             </div>
 
             <div class="metric-value {signal_class}">
-            {signal}
+                {signal}
             </div>
+
         </div>
-        ''',
+        """,
         unsafe_allow_html=True
     )
 
 with col2:
 
     st.markdown(
-        f'''
+        f"""
         <div class="card">
+
             <div class="metric-title">
-            Confidence
+                Confidence
             </div>
 
             <div class="metric-value">
-            {confidence}%
+                {confidence}%
             </div>
+
         </div>
-        ''',
+        """,
         unsafe_allow_html=True
     )
 
 with col3:
 
     st.markdown(
-        f'''
+        f"""
         <div class="card">
+
             <div class="metric-title">
-            Risk Level
+                Risk Level
             </div>
 
             <div class="metric-value">
-            {risk}
+                {risk}
             </div>
+
         </div>
-        ''',
+        """,
         unsafe_allow_html=True
     )
 
-st.subheader("⚡ AI Confidence Meter")
+st.subheader(
+    "⚡ AI Confidence Meter"
+)
 
 st.progress(confidence / 100)
 
-st.subheader("📡 Live AI Market Feed")
-
-st.write(f"Selected Stock: {stock}")
-
-st.write(
-    "AI scanning RSI, MACD, EMA and momentum signals..."
+st.subheader(
+    "📡 Live AI Market Feed"
 )
 
 st.write(
-    "Detecting institutional buying pressure..."
+    f"Selected Stock: {stock}"
+)
+
+st.write(
+    f"Latest Close Price: ${latest_close}"
+)
+
+st.write(
+    f"RSI Value: {latest_rsi}"
+)
+
+st.write(
+    f"MACD Value: {latest_macd}"
+)
+
+st.write(
+    "AI scanning RSI, MACD and EMA signals..."
+)
+
+st.write(
+    "Detecting market momentum..."
 )
 
 st.write(
     "Volatility engine active..."
 )
 
-st.subheader("📈 Stock Trend Visualization")
+st.subheader(
+    "📈 Live Stock Price Chart"
+)
 
-chart_data = [10,15,13,18,20,17,25,28,30]
+st.line_chart(
+    data["Close"]
+)
 
-st.line_chart(chart_data)
-
-st.subheader("🧠 AI Analysis")
+st.subheader(
+    "🧠 AI Analysis"
+)
 
 if signal == "BUY":
 
     st.success(
-        "Bullish momentum detected with strong trend confirmation."
+        "Bullish momentum detected."
     )
 
 elif signal == "SELL":
 
     st.error(
-        "Bearish pressure and high volatility detected."
+        "Bearish pressure detected."
     )
 
 else:
 
     st.warning(
-        "Market momentum is currently neutral."
+        "Neutral market momentum."
     )
+
+st.subheader(
+    "📊 Latest Market Data"
+)
+
+st.dataframe(
+    data.tail(5)
+)
 
 st.markdown("---")
 
